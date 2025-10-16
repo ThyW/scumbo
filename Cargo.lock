@@ -2344,6 +2344,7 @@ name = "scumbo"
 version = "0.1.0"
 dependencies = [
  "dotenv",
+ "parking_lot",
  "poise",
  "serenity",
  "songbird",

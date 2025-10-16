@@ -3,9 +3,13 @@
 use poise::{Framework, FrameworkOptions, PrefixFrameworkOptions};
 use serenity::model::gateway::GatewayIntents;
 
+use songbird::{Config, SerenityInit};
+
 mod callbacks;
 mod commands;
+mod handlers;
 mod smq;
+mod utils;
 
 // For owner only commands.
 pub const OWNER_ID: u64 = 272795263414829057;
@@ -41,8 +45,10 @@ async fn main() -> Result_<()> {
                 crate::commands::echo(),
                 crate::commands::id(),
                 crate::commands::help(),
+                crate::commands::join(),
+                crate::commands::leave(),
             ],
-            on_error: callbacks::on_error,
+            on_error: crate::callbacks::on_error,
             owners: std::collections::HashSet::from([OWNER_ID.into()]),
             prefix_options: PrefixFrameworkOptions {
                 prefix: Some(prefix),
@@ -54,16 +60,21 @@ async fn main() -> Result_<()> {
         .setup(move |_ctx, _ready, _framework| Box::pin(async move { Ok(State {}) }))
         .build();
 
+    // Create a `songbird` configuration.
+    let songbird_config = Config::default()
+        .preallocated_tracks(16)
+        .use_softclip(false)
+        .driver_timeout(Some(std::time::Duration::from_secs(30)));
+
     // Setup the discord client.
-    let client = serenity::Client::builder(token, intents)
+    let mut client = serenity::Client::builder(token, intents)
         .framework(framework)
-        .await;
+        .register_songbird_from_config(songbird_config)
+        .await
+        .expect("client should have been correctly created");
 
     // Run the bot.
-    client
-        .expect("client should have been correctly created")
-        .start()
-        .await?;
+    client.start().await?;
 
     Ok(())
 }
