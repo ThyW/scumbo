@@ -1,15 +1,20 @@
 #![allow(clippy::map_entry)]
 
+use std::collections::HashMap;
+
 use poise::{Framework, FrameworkOptions, PrefixFrameworkOptions};
-use serenity::model::gateway::GatewayIntents;
+use serenity::model::{gateway::GatewayIntents, id::GuildId};
 
 use songbird::{Config, SerenityInit};
 
 mod callbacks;
 mod commands;
 mod handlers;
+mod queue;
 mod smq;
 mod utils;
+
+use crate::queue::TrackQueue;
 
 // For owner only commands.
 pub const OWNER_ID: u64 = 272795263414829057;
@@ -20,7 +25,9 @@ pub type Result_<T> = Result<T, Error>;
 pub type Context<'a> = poise::Context<'a, State, Error>;
 
 // Bot state goes here.
-pub struct State {}
+pub struct State {
+    qs: HashMap<GuildId, TrackQueue>,
+}
 
 #[tokio::main]
 async fn main() -> Result_<()> {
@@ -57,7 +64,13 @@ async fn main() -> Result_<()> {
             ..Default::default()
         })
         // Run the framework setup, initializing user data.
-        .setup(move |_ctx, _ready, _framework| Box::pin(async move { Ok(State {}) }))
+        .setup(move |_ctx, _ready, _framework| {
+            Box::pin(async move {
+                Ok(State {
+                    qs: Default::default(),
+                })
+            })
+        })
         .build();
 
     // Create a `songbird` configuration.

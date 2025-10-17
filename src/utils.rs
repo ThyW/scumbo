@@ -45,6 +45,7 @@ pub async fn join_voice(
     match connection_result {
         Ok(driver) => {
             let mut driver = driver.lock().await;
+            // TODO: All `TrackEvent` handlers for the queue should go here.
             driver.add_global_event(
                 songbird::TrackEvent::Error.into(),
                 crate::handlers::TrackErrorHandler,
