@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::collections::VecDeque;
 
 /// A fixed sized buffer for holding up to `capacity` data about tracks played in a single server.

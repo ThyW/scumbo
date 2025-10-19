@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use crate::{Context, Result_};
 use serenity::all::Attachment;
 use songbird::input::{HttpRequest, YoutubeDl};
@@ -112,7 +114,7 @@ pub async fn play(ctx: Context<'_>, query: Option<String>) -> Result_<()> {
 /// Search for a query and return a list of search results.
 #[poise::command(prefix_command, category = "Music", guild_only)]
 pub async fn search(ctx: Context<'_>, query: String) -> Result_<()> {
-    Ok(())
+    todo!()
 }
 
 /// Try to play a song from the provided url.
@@ -147,7 +149,7 @@ pub async fn url(ctx: Context<'_>, url: String) -> Result_<()> {
 /// Play a file attached to the message.
 #[poise::command(prefix_command, category = "Music", guild_only)]
 pub async fn file(ctx: Context<'_>, file: Attachment) -> Result_<()> {
-    Ok(())
+    todo!()
 }
 
 /// Subcommands for maniuplating the queue.
@@ -159,25 +161,25 @@ pub async fn file(ctx: Context<'_>, file: Attachment) -> Result_<()> {
     guild_only
 )]
 pub async fn queue(ctx: Context<'_>) -> Result_<()> {
-    Ok(())
+    todo!()
 }
 
 /// Show the contents of the queue.
 #[poise::command(prefix_command, category = "Music", guild_only)]
 pub async fn show(ctx: Context<'_>) -> Result_<()> {
-    Ok(())
+    todo!()
 }
 
 /// Show the song history.
 #[poise::command(prefix_command, category = "Music", guild_only)]
 pub async fn history(ctx: Context<'_>) -> Result_<()> {
-    Ok(())
+    todo!()
 }
 
 /// Shuffle the queue.
 #[poise::command(prefix_command, category = "Music", guild_only)]
 pub async fn shuffle(ctx: Context<'_>) -> Result_<()> {
-    Ok(())
+    todo!()
 }
 
 /// Pause the currently playing track.

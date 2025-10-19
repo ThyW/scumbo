@@ -88,7 +88,7 @@ impl TrackQueue {
             title: metadata.title.unwrap_or_else(|| "Unknown track".into()),
         };
 
-        let track = Track::new_with_data(input.into(), Arc::new(user_data));
+        let track = Track::new_with_data(input, Arc::new(user_data));
         Ok(self.add(track, driver).await)
     }
 
@@ -100,7 +100,7 @@ impl TrackQueue {
         driver: &mut Driver,
     ) -> Result_<TrackHandle> {
         let user_data = TrackUserData::HttpStream { url };
-        let track = Track::new_with_data(input.into(), Arc::new(user_data));
+        let track = Track::new_with_data(input, Arc::new(user_data));
         Ok(self.add(track, driver).await)
     }
 
@@ -221,9 +221,9 @@ impl TrackQueue {
     pub fn clear(&self) -> TrackResult<()> {
         let mut inner = self.inner.lock();
 
-        inner
-            .stop_current()
-            .and_then(|_| Ok(inner.queued_tracks.clear()))
+        inner.stop_current().map(|_| {
+            inner.queued_tracks.clear();
+        })
     }
 
     /// Stop the queue.
