@@ -1,4 +1,6 @@
 use crate::{Context, Result_};
+use serenity::all::Attachment;
+use songbird::input::{HttpRequest, YoutubeDl};
 
 /// Simple `echo` command for parroting everything the user types.
 #[poise::command(prefix_command, category = "Testing")]
@@ -58,5 +60,164 @@ pub async fn leave(ctx: Context<'_>) -> Result_<()> {
     } else {
         ctx.reply("I'm not in a voice channel, you dummy!").await?;
     }
+    Ok(())
+}
+
+/// Resume playing a song or try to play the first result of the query search.
+#[poise::command(
+    prefix_command,
+    category = "Music",
+    guild_only,
+    subcommands("search", "url", "file")
+)]
+pub async fn play(ctx: Context<'_>, query: Option<String>) -> Result_<()> {
+    let guild_id = ctx.guild_id().expect("Should be in server.");
+    let (songbird_manager, has_handler) = super::utils::in_voice(ctx).await?;
+    if !has_handler {
+        super::utils::join_voice(ctx, None).await?;
+    }
+
+    let call = songbird_manager
+        .get(ctx.guild_id().expect("Only in guilds"))
+        .expect("Should be connected.");
+
+    match query {
+        Some(query_) => {
+            let mut driver = call.lock().await;
+            let user_data = ctx.data();
+            let client = user_data.client.clone();
+            let q = user_data
+                .qs
+                .lock()
+                .get(&guild_id)
+                .expect("Should have been created when joining.")
+                .clone();
+            let search = YoutubeDl::new_search(client, query_);
+
+            let _ = q.add_from_youtube(search.into(), &mut driver).await?;
+        }
+        None => {
+            ctx.data()
+                .qs
+                .lock()
+                .get(&guild_id)
+                .expect("Should have been created when joining.")
+                .resume()?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Search for a query and return a list of search results.
+#[poise::command(prefix_command, category = "Music", guild_only)]
+pub async fn search(ctx: Context<'_>, query: String) -> Result_<()> {
+    Ok(())
+}
+
+/// Try to play a song from the provided url.
+#[poise::command(prefix_command, category = "Music", guild_only)]
+pub async fn url(ctx: Context<'_>, url: String) -> Result_<()> {
+    let guild_id = ctx.guild_id().expect("Should be in server.");
+    let (songbird_manager, has_handler) = super::utils::in_voice(ctx).await?;
+    if !has_handler {
+        super::utils::join_voice(ctx, None).await?;
+    }
+
+    let call = songbird_manager
+        .get(ctx.guild_id().expect("Only in guilds"))
+        .expect("Should be connected.");
+
+    let mut driver = call.lock().await;
+    let user_data = ctx.data();
+    let client = user_data.client.clone();
+    let q = user_data
+        .qs
+        .lock()
+        .get(&guild_id)
+        .expect("Should have been created when joining.")
+        .clone();
+    let search = HttpRequest::new(client, url.clone());
+
+    let _ = q.add_from_stream(search.into(), url, &mut driver).await?;
+
+    Ok(())
+}
+
+/// Play a file attached to the message.
+#[poise::command(prefix_command, category = "Music", guild_only)]
+pub async fn file(ctx: Context<'_>, file: Attachment) -> Result_<()> {
+    Ok(())
+}
+
+/// Subcommands for maniuplating the queue.
+#[poise::command(
+    prefix_command,
+    category = "Music",
+    subcommands("show", "history", "shuffle"),
+    subcommand_required,
+    guild_only
+)]
+pub async fn queue(ctx: Context<'_>) -> Result_<()> {
+    Ok(())
+}
+
+/// Show the contents of the queue.
+#[poise::command(prefix_command, category = "Music", guild_only)]
+pub async fn show(ctx: Context<'_>) -> Result_<()> {
+    Ok(())
+}
+
+/// Show the song history.
+#[poise::command(prefix_command, category = "Music", guild_only)]
+pub async fn history(ctx: Context<'_>) -> Result_<()> {
+    Ok(())
+}
+
+/// Shuffle the queue.
+#[poise::command(prefix_command, category = "Music", guild_only)]
+pub async fn shuffle(ctx: Context<'_>) -> Result_<()> {
+    Ok(())
+}
+
+/// Pause the currently playing track.
+#[poise::command(prefix_command, category = "Music", guild_only)]
+pub async fn pause(ctx: Context<'_>) -> Result_<()> {
+    let guild_id = ctx.guild_id().expect("Is in a guild.");
+    let (_, has_handler) = super::utils::in_voice(ctx).await?;
+    if !has_handler {
+        ctx.reply("Not in a voice channel, good sir!").await?;
+        return Ok(());
+    }
+
+    ctx.data()
+        .qs
+        .lock()
+        .get(&guild_id)
+        .expect("Should have been created.")
+        .clone()
+        .pause()?;
+
+    Ok(())
+}
+
+/// Stop all queued tracks.
+#[poise::command(prefix_command, category = "Music", guild_only)]
+pub async fn stop(ctx: Context<'_>) -> Result_<()> {
+    let guild_id = ctx.guild_id().expect("Should be in server.");
+    let (_, has_handler) = super::utils::in_voice(ctx).await?;
+
+    if !has_handler {
+        ctx.reply("Not in a voice channel, good sir!").await?;
+        return Ok(());
+    }
+
+    ctx.data()
+        .qs
+        .lock()
+        .get(&guild_id)
+        .expect("Should have been created.")
+        .stop();
+
     Ok(())
 }

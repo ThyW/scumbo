@@ -8,6 +8,7 @@ dotenv = "0.15.0"
 parking_lot = "0.12.5"
 poise = "0.6"
 songbird = "0.5"
+reqwest = "0.12"
 
 [dependencies.tokio]
 version = "1"
@@ -16,3 +17,7 @@ features = ["macros", "rt-multi-thread"]
 [dependencies.serenity]
 version = "0.12"
 features = ["full"]
+
+[dependencies.symphonia]
+version = "0.5"
+features = ["aac", "mp3", "alac"]

@@ -1,7 +1,7 @@
 use crate::{Context, Result_};
 
-// This is an auxiliary function which does the "joining" to a voice channel. It is here, because
-// both `join` and `play` commands are used to join a voice channel.
+/// This is an auxiliary function which does the "joining" to a voice channel. It is here, because
+/// both `join` and `play` commands are used to join a voice channel.
 pub async fn join_voice(
     ctx: Context<'_>,
     voice_channel: Option<serenity::model::channel::GuildChannel>,
@@ -45,6 +45,10 @@ pub async fn join_voice(
     match connection_result {
         Ok(driver) => {
             let mut driver = driver.lock().await;
+            ctx.data()
+                .qs
+                .lock()
+                .insert(guild_id, super::queue::TrackQueue::new(50));
             // TODO: All `TrackEvent` handlers for the queue should go here.
             driver.add_global_event(
                 songbird::TrackEvent::Error.into(),
@@ -60,7 +64,7 @@ pub async fn join_voice(
     Ok(())
 }
 
-// Used to check if the bot is in a voice channel.
+/// Used to check if the bot is in a voice channel.
 pub async fn in_voice(ctx: Context<'_>) -> Result_<(std::sync::Arc<songbird::Songbird>, bool)> {
     let guild_id = ctx.guild_id().expect("Should be in a guild.");
 

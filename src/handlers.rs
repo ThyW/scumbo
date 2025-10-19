@@ -1,5 +1,11 @@
 use serenity::async_trait;
 use songbird::{Event, EventContext, EventHandler as VoiceEventHandler};
+use std::sync::Arc;
+
+use crate::{
+    history::TrackUserData,
+    queue::{QueueHandler, SongPreloader},
+};
 
 pub struct TrackErrorHandler;
 
@@ -14,6 +20,55 @@ impl VoiceEventHandler for TrackErrorHandler {
                     state.playing
                 );
             }
+        }
+
+        None
+    }
+}
+
+#[async_trait]
+impl VoiceEventHandler for QueueHandler {
+    async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
+        let mut inner = self.remote_lock.lock();
+
+        match ctx {
+            EventContext::Track(ts) => {
+                if inner.queued_tracks.front()?.uuid() != ts.first()?.1.uuid() {
+                    return None;
+                }
+            }
+            _ => return None,
+        }
+
+        let old = inner.queued_tracks.pop_front();
+        if let Some(track) = old {
+            inner
+                .history
+                .add(Arc::unwrap_or_clone(track.data::<TrackUserData>()))
+        }
+
+        // Keep going until we find one track which works, or we run out.
+        while let Some(new) = inner.queued_tracks.front() {
+            if new.play().is_err() {
+                // Discard files which cannot be used for whatever reason.
+                inner.queued_tracks.pop_front();
+            } else {
+                break;
+            }
+        }
+
+        None
+    }
+}
+
+#[async_trait]
+impl VoiceEventHandler for SongPreloader {
+    async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
+        let inner = self.remote_lock.lock();
+
+        if let Some(track) = inner.queued_tracks.get(1) {
+            // This is the sync-version so that we can fire and ignore
+            drop(track.0.make_playable());
         }
 
         None

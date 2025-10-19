@@ -1,15 +1,16 @@
 #![allow(clippy::map_entry)]
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
+use parking_lot::Mutex;
 use poise::{Framework, FrameworkOptions, PrefixFrameworkOptions};
 use serenity::model::{gateway::GatewayIntents, id::GuildId};
-
 use songbird::{Config, SerenityInit};
 
 mod callbacks;
 mod commands;
 mod handlers;
+mod history;
 mod queue;
 mod smq;
 mod utils;
@@ -26,7 +27,8 @@ pub type Context<'a> = poise::Context<'a, State, Error>;
 
 // Bot state goes here.
 pub struct State {
-    qs: HashMap<GuildId, TrackQueue>,
+    client: reqwest::Client,
+    qs: Arc<Mutex<HashMap<GuildId, TrackQueue>>>,
 }
 
 #[tokio::main]
@@ -42,7 +44,9 @@ async fn main() -> Result_<()> {
     // Set all unprivileged intents.
     //
     // Because we want to use prefixes, the `MESSAGE_CONTENT` intent is also necessary.
-    let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
+    let intents = GatewayIntents::non_privileged()
+        | GatewayIntents::MESSAGE_CONTENT
+        | GatewayIntents::GUILD_VOICE_STATES;
 
     // Here we setup the command parsing framework. (poise)
     let framework = Framework::builder()
@@ -54,6 +58,10 @@ async fn main() -> Result_<()> {
                 crate::commands::help(),
                 crate::commands::join(),
                 crate::commands::leave(),
+                crate::commands::play(),
+                crate::commands::queue(),
+                crate::commands::pause(),
+                crate::commands::stop(),
             ],
             on_error: crate::callbacks::on_error,
             owners: std::collections::HashSet::from([OWNER_ID.into()]),
@@ -68,6 +76,7 @@ async fn main() -> Result_<()> {
             Box::pin(async move {
                 Ok(State {
                     qs: Default::default(),
+                    client: reqwest::Client::new(),
                 })
             })
         })
