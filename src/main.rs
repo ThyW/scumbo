@@ -12,7 +12,6 @@ mod commands;
 mod handlers;
 mod history;
 mod queue;
-mod smq;
 mod utils;
 
 use crate::queue::TrackQueue;
@@ -72,7 +71,7 @@ async fn main() -> Result_<()> {
             ..Default::default()
         })
         // Run the framework setup, initializing user data.
-        .setup(move |_ctx, _ready, _framework| {
+        .setup(move |_, _, _| {
             Box::pin(async move {
                 Ok(State {
                     qs: Default::default(),
