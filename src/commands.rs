@@ -1,7 +1,9 @@
-#![allow(unused)]
-
-use crate::{Context, Result_};
-use serenity::all::Attachment;
+use crate::{Context, Result_, history::TrackUserData};
+use serenity::all::{
+    Attachment, ComponentInteractionCollector, ComponentInteractionDataKind, CreateEmbed,
+    CreateInteractionResponse, CreateMessage, CreateSelectMenu, CreateSelectMenuKind,
+    CreateSelectMenuOption,
+};
 use songbird::input::{HttpRequest, YoutubeDl};
 
 /// Simple `echo` command for parroting everything the user types.
@@ -111,13 +113,95 @@ pub async fn play(ctx: Context<'_>, query: Option<String>) -> Result_<()> {
     Ok(())
 }
 
-/// Search for a query and return a list of search results.
+/// Search for `query` on `YouTube` and return a list of search results.
 #[poise::command(prefix_command, category = "Music", guild_only)]
 pub async fn search(ctx: Context<'_>, query: String) -> Result_<()> {
-    todo!()
+    let guild_id = ctx.guild_id().expect("Should be in a server.");
+    let (songbird_manager, has_handler) = super::utils::in_voice(ctx).await?;
+    if !has_handler {
+        super::utils::join_voice(ctx, None).await?;
+    }
+
+    let call = songbird_manager
+        .get(guild_id)
+        .expect("Should be in a voice channel.");
+
+    let user_data = ctx.data();
+    let client = user_data.client.clone();
+
+    // Run the search.
+    let mut youtube_search = YoutubeDl::new_search(client.clone(), query);
+    let search_results = youtube_search.search(Some(10)).await?.collect::<Vec<_>>();
+
+    // Create a message for the user to pick the result.
+    // TODO: make this nice and make it used thumbnails.
+    let selection_context = CreateMessage::new()
+        .embed(CreateEmbed::new().title("Serach results:"))
+        .select_menu(CreateSelectMenu::new(
+            "search-select-menu",
+            CreateSelectMenuKind::String {
+                options: search_results
+                    .iter()
+                    .map(|meta| {
+                        let label = meta.title.clone().unwrap_or("Unknown track".into());
+                        let value = meta.source_url.clone().unwrap_or_default();
+                        CreateSelectMenuOption::new(label, value)
+                    })
+                    .collect(),
+            },
+        ));
+    let select_message = ctx
+        .channel_id()
+        .send_message(ctx.http(), selection_context)
+        .await?;
+
+    let mut url = None;
+
+    // Get a single result.
+    while let Some(interaction) = ComponentInteractionCollector::new(ctx)
+        .author_id(ctx.author().id)
+        .channel_id(ctx.channel_id())
+        .timeout(std::time::Duration::from_secs(120))
+        .filter(move |interaction| interaction.data.custom_id == "search-select-menu")
+        .await
+    {
+        url = match interaction.data.kind {
+            ComponentInteractionDataKind::StringSelect { ref values } => {
+                values.iter().next().cloned()
+            }
+            _ => None,
+        };
+        interaction
+            .create_response(ctx.http(), CreateInteractionResponse::Acknowledge)
+            .await?;
+
+        // After getting the correct selection, remove the message.
+        if url.is_some() {
+            select_message.delete(ctx.http()).await?;
+            break;
+        }
+    }
+
+    let url = url.unwrap();
+
+    let source = YoutubeDl::new(client, url);
+
+    {
+        let q = user_data
+            .qs
+            .lock()
+            .get(&guild_id)
+            .expect("Should have been initialized.")
+            .clone();
+        let mut driver = call.lock().await;
+
+        q.add_from_youtube(source.into(), &mut driver).await?;
+    }
+
+    Ok(())
 }
 
-/// Try to play a song from the provided url.
+/// Try to play a song from the provided URL.
 #[poise::command(prefix_command, category = "Music", guild_only)]
 pub async fn url(ctx: Context<'_>, url: String) -> Result_<()> {
     let guild_id = ctx.guild_id().expect("Should be in server.");
@@ -149,10 +233,33 @@ pub async fn url(ctx: Context<'_>, url: String) -> Result_<()> {
 /// Play a file attached to the message.
 #[poise::command(prefix_command, category = "Music", guild_only)]
 pub async fn file(ctx: Context<'_>, file: Attachment) -> Result_<()> {
-    todo!()
+    let guild_id = ctx.guild_id().expect("Should be in a server.");
+    let (songbird_manager, has_handler) = super::utils::in_voice(ctx).await?;
+    if !has_handler {
+        super::utils::join_voice(ctx, None).await?;
+    }
+
+    let call = songbird_manager
+        .get(guild_id)
+        .expect("Should be connected to voice.");
+
+    {
+        let mut driver = call.lock().await;
+        let q = ctx
+            .data()
+            .qs
+            .lock()
+            .get(&guild_id)
+            .expect("Should have been created.")
+            .clone();
+
+        let _ = q.add_from_attachment(file, &mut driver).await?;
+    }
+
+    Ok(())
 }
 
-/// Subcommands for maniuplating the queue.
+/// Subcommands for manipulating the queue.
 #[poise::command(
     prefix_command,
     category = "Music",
@@ -160,26 +267,133 @@ pub async fn file(ctx: Context<'_>, file: Attachment) -> Result_<()> {
     subcommand_required,
     guild_only
 )]
-pub async fn queue(ctx: Context<'_>) -> Result_<()> {
-    todo!()
+pub async fn queue(_: Context<'_>) -> Result_<()> {
+    Ok(())
 }
 
 /// Show the contents of the queue.
 #[poise::command(prefix_command, category = "Music", guild_only)]
 pub async fn show(ctx: Context<'_>) -> Result_<()> {
-    todo!()
+    let guild_id = ctx.guild_id().expect("Should be in a server.");
+    let (_, has_handler) = super::utils::in_voice(ctx).await?;
+    if !has_handler {
+        ctx.reply("Not in a voice channel, good sir!").await?;
+        return Ok(());
+    }
+    let queued = ctx
+        .data()
+        .qs
+        .lock()
+        .get(&guild_id)
+        .expect("Should have been initialized")
+        .clone()
+        .current_queue();
+
+    let pages = queued
+        .chunks(10)
+        .enumerate()
+        .map(|(chunk, handles)| {
+            let mut page = String::new();
+            for (i, handle) in handles.iter().enumerate() {
+                match handle.data::<TrackUserData>().as_ref() {
+                    TrackUserData::Youtube { title, url: _ } => page.push_str(&format!(
+                        "{}. {} (from YouTube)\n",
+                        chunk * 10 + i + 1,
+                        title
+                    )),
+                    TrackUserData::Attachment {
+                        title,
+                        attachment_url: _,
+                    } => page.push_str(&format!(
+                        "{}. {} (from file attachment)\n",
+                        chunk * 10 + i + 1,
+                        title
+                    )),
+                    TrackUserData::HttpStream { url } => {
+                        page.push_str(&format!("{}. {} (http stream)\n", chunk * 10 + i + 1, url))
+                    }
+                }
+            }
+            page
+        })
+        .collect::<Vec<_>>();
+
+    super::utils::paginate(ctx, pages).await?;
+
+    Ok(())
 }
 
 /// Show the song history.
 #[poise::command(prefix_command, category = "Music", guild_only)]
 pub async fn history(ctx: Context<'_>) -> Result_<()> {
-    todo!()
+    let guild_id = ctx.guild_id().expect("Should be in a server.");
+    let (_, has_handler) = super::utils::in_voice(ctx).await?;
+    if !has_handler {
+        ctx.reply("Not in a voice channel, good sir!").await?;
+        return Ok(());
+    }
+    let queued = ctx
+        .data()
+        .qs
+        .lock()
+        .get(&guild_id)
+        .expect("Should have been initialized")
+        .clone()
+        .history();
+
+    let pages = queued
+        .chunks(10)
+        .enumerate()
+        .map(|(chunk, handles)| {
+            let mut page = String::new();
+            for (i, handle) in handles.iter().enumerate() {
+                match handle {
+                    TrackUserData::Youtube { title, url: _ } => page.push_str(&format!(
+                        "{}. {} (from YouTube)\n",
+                        chunk * 10 + i + 1,
+                        title
+                    )),
+                    TrackUserData::Attachment {
+                        title,
+                        attachment_url: _,
+                    } => page.push_str(&format!(
+                        "{}. {} (from file attachment)\n",
+                        chunk * 10 + i + 1,
+                        title
+                    )),
+                    TrackUserData::HttpStream { url } => {
+                        page.push_str(&format!("{}. {} (http stream)\n", chunk * 10 + i + 1, url))
+                    }
+                }
+            }
+            page
+        })
+        .collect::<Vec<_>>();
+
+    super::utils::paginate(ctx, pages).await?;
+
+    Ok(())
 }
 
 /// Shuffle the queue.
 #[poise::command(prefix_command, category = "Music", guild_only)]
 pub async fn shuffle(ctx: Context<'_>) -> Result_<()> {
-    todo!()
+    let guild_id = ctx.guild_id().expect("Should be in a server.");
+    let (_, has_handler) = super::utils::in_voice(ctx).await?;
+    if !has_handler {
+        ctx.reply("Not in a voice channel, good sir!").await?;
+        return Ok(());
+    }
+
+    ctx.data()
+        .qs
+        .lock()
+        .get(&guild_id)
+        .expect("Should be initialized.")
+        .clone()
+        .shuffle();
+
+    Ok(())
 }
 
 /// Pause the currently playing track.

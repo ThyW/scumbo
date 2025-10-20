@@ -9,6 +9,7 @@ parking_lot = "0.12.5"
 poise = "0.6"
 songbird = "0.5"
 reqwest = "0.12"
+rand = "0.9"
 
 [dependencies.tokio]
 version = "1"

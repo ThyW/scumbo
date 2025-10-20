@@ -1,15 +1,14 @@
-#![allow(unused)]
 use crate::{
     Result_,
     history::{History, TrackUserData},
 };
 use parking_lot::Mutex;
+use rand::random_range;
 use serenity::all::Attachment;
 use songbird::{
-    Call,
     driver::Driver,
     events::{Event, EventData, TrackEvent},
-    input::{Compose, File, HttpRequest, Input, YoutubeDl},
+    input::Input,
     tracks::{Track, TrackHandle, TrackResult},
 };
 use std::{collections::VecDeque, ops::Deref, sync::Arc, time::Duration};
@@ -95,7 +94,7 @@ impl TrackQueue {
     /// Add a track from an HTTP request.
     pub async fn add_from_stream(
         &self,
-        mut input: Input,
+        input: Input,
         url: String,
         driver: &mut Driver,
     ) -> Result_<TrackHandle> {
@@ -159,6 +158,7 @@ impl TrackQueue {
     }
 
     /// Get the currently playing track.
+    #[allow(unused)]
     pub fn current(&self) -> Option<TrackHandle> {
         let inner = self.inner.lock();
 
@@ -166,11 +166,13 @@ impl TrackQueue {
     }
 
     /// Remove track at `index` without adding it to `History`.
+    #[allow(unused)]
     pub fn dequeue(&self, index: usize) -> Option<Queued> {
         self.modify_queue(|vq| vq.remove(index))
     }
 
     /// Get the length of the queue.
+    #[allow(unused)]
     pub fn len(&self) -> usize {
         let inner = self.inner.lock();
 
@@ -178,6 +180,7 @@ impl TrackQueue {
     }
 
     /// Is the queue empty?
+    #[allow(unused)]
     pub fn is_empty(&self) -> bool {
         let inner = self.inner.lock();
 
@@ -185,6 +188,7 @@ impl TrackQueue {
     }
 
     /// Run a `func` to modify the queue.
+    #[allow(unused)]
     pub fn modify_queue<F, O>(&self, func: F) -> O
     where
         F: FnOnce(&mut VecDeque<Queued>) -> O,
@@ -218,6 +222,7 @@ impl TrackQueue {
     /// Stop the current track and remove all further tracks from the queue.
     ///
     /// This does not save the tracks which were not played in the history.
+    #[allow(unused)]
     pub fn clear(&self) -> TrackResult<()> {
         let mut inner = self.inner.lock();
 
@@ -239,16 +244,19 @@ impl TrackQueue {
     }
 
     /// Try to skip up to `n` tracks.
+    #[allow(unused)]
     pub fn skip(&self, mut n: usize) -> TrackResult<()> {
         let inner = self.inner.lock();
 
         while n > 0 && !inner.queued_tracks.is_empty() {
             inner.stop_current()?;
+            n -= 1;
         }
         Ok(())
     }
 
     /// Get the contents of the current queue.
+    #[allow(unused)]
     pub fn current_queue(&self) -> Vec<TrackHandle> {
         let inner = self.inner.lock();
 
@@ -256,6 +264,7 @@ impl TrackQueue {
     }
 
     /// Get the track history.
+    #[allow(unused)]
     pub fn history(&self) -> Vec<TrackUserData> {
         let inner = self.inner.lock();
 
@@ -263,10 +272,22 @@ impl TrackQueue {
     }
 
     /// Get the metadata of a previously played track.
+    #[allow(unused)]
     pub fn previous(&self, n: usize) -> Option<TrackUserData> {
         let inner = self.inner.lock();
 
         inner.history.peek(n).cloned()
+    }
+
+    /// Shuffle the queue, leaving the first (currently playing) track untouched.
+    pub fn shuffle(&self) {
+        let mut inner = self.inner.lock();
+
+        // Fisher-Yates shuffle: https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
+        for i in (1..inner.queued_tracks.len()).rev().take_while(|&x| x > 1) {
+            let num = random_range(1..i);
+            inner.queued_tracks.swap(i, num);
+        }
     }
 }
 
@@ -277,5 +298,25 @@ impl TrackQueueCore {
         } else {
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shuffle() {
+        let mut queue = VecDeque::new();
+
+        (0..10).for_each(|x| queue.push_back(x));
+        let snd = queue.clone();
+
+        for i in (1..queue.len()).rev().take_while(|x| x > &1) {
+            let num = random_range(1..i);
+            queue.swap(i, num);
+        }
+
+        assert_ne!(queue, snd);
     }
 }

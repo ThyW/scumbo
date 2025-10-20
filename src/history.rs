@@ -74,3 +74,29 @@ pub enum TrackUserData {
         url: String,
     },
 }
+
+impl TrackUserData {
+    /// Get the track title.
+    pub fn title(&self) -> String {
+        match self {
+            TrackUserData::Youtube { title, url: _ } => title.clone(),
+            TrackUserData::Attachment {
+                title,
+                attachment_url: _,
+            } => title.clone(),
+            TrackUserData::HttpStream { url } => format!("HTTP stream: {url}"),
+        }
+    }
+
+    /// Get the source URL of the track.
+    pub fn url(&self) -> String {
+        match self {
+            TrackUserData::Youtube { title: _, url } => url.clone(),
+            TrackUserData::Attachment {
+                title: _,
+                attachment_url,
+            } => attachment_url.clone(),
+            TrackUserData::HttpStream { url } => url.clone(),
+        }
+    }
+}

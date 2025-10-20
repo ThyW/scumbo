@@ -1,4 +1,7 @@
-use serenity::async_trait;
+use serenity::{
+    all::{ChannelId, CreateEmbed, CreateMessage, Http},
+    async_trait,
+};
 use songbird::{Event, EventContext, EventHandler as VoiceEventHandler};
 use std::sync::Arc;
 
@@ -72,5 +75,30 @@ impl VoiceEventHandler for SongPreloader {
         }
 
         None
+    }
+}
+
+pub struct ResumeHandler(pub (ChannelId, Http));
+
+#[async_trait]
+impl VoiceEventHandler for ResumeHandler {
+    async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
+        match ctx {
+            EventContext::Track(track) => {
+                if let Some((_, handle)) = track.first() {
+                    let title = handle.data::<TrackUserData>().title();
+                    let (channel_id, http) = &self.0;
+                    let _ = channel_id
+                        .send_message(
+                            http,
+                            CreateMessage::new()
+                                .embed(CreateEmbed::new().title("Now playing").description(title)),
+                        )
+                        .await;
+                };
+                return None;
+            }
+            _ => None,
+        }
     }
 }
