@@ -6,6 +6,8 @@ use serenity::all::{
 };
 use songbird::input::{HttpRequest, YoutubeDl};
 
+use super::utils::reply;
+
 /// Simple `echo` command for parroting everything the user types.
 #[poise::command(prefix_command, category = "Testing")]
 pub async fn echo(ctx: Context<'_>, value: Option<String>) -> Result_<()> {
@@ -60,9 +62,11 @@ pub async fn leave(ctx: Context<'_>) -> Result_<()> {
     if has_handler {
         songbird_manager.remove(ctx.guild_id().unwrap()).await?;
 
-        ctx.reply("I have left the voice channel.").await?;
+        ctx.send(reply("Info", "I have left the voice channel."))
+            .await?;
     } else {
-        ctx.reply("I'm not in a voice channel, you dummy!").await?;
+        ctx.send(reply("Error", "I am not in a voice channel."))
+            .await?;
     }
     Ok(())
 }
@@ -277,7 +281,8 @@ pub async fn show(ctx: Context<'_>) -> Result_<()> {
     let guild_id = ctx.guild_id().expect("Should be in a server.");
     let (_, has_handler) = super::utils::in_voice(ctx).await?;
     if !has_handler {
-        ctx.reply("Not in a voice channel, good sir!").await?;
+        ctx.send(reply("Error", "Not in a voice channel, good sir!"))
+            .await?;
         return Ok(());
     }
     let queued = ctx
@@ -329,7 +334,8 @@ pub async fn history(ctx: Context<'_>) -> Result_<()> {
     let guild_id = ctx.guild_id().expect("Should be in a server.");
     let (_, has_handler) = super::utils::in_voice(ctx).await?;
     if !has_handler {
-        ctx.reply("Not in a voice channel, good sir!").await?;
+        ctx.send(reply("Error", "Not in a voice channel, good sir!"))
+            .await?;
         return Ok(());
     }
     let queued = ctx
@@ -381,7 +387,8 @@ pub async fn shuffle(ctx: Context<'_>) -> Result_<()> {
     let guild_id = ctx.guild_id().expect("Should be in a server.");
     let (_, has_handler) = super::utils::in_voice(ctx).await?;
     if !has_handler {
-        ctx.reply("Not in a voice channel, good sir!").await?;
+        ctx.send(reply("Error", "Not in a voice channel, good sir!"))
+            .await?;
         return Ok(());
     }
 
@@ -402,7 +409,8 @@ pub async fn pause(ctx: Context<'_>) -> Result_<()> {
     let guild_id = ctx.guild_id().expect("Is in a guild.");
     let (_, has_handler) = super::utils::in_voice(ctx).await?;
     if !has_handler {
-        ctx.reply("Not in a voice channel, good sir!").await?;
+        ctx.send(reply("Error", "Not in a voice channel, good sir!"))
+            .await?;
         return Ok(());
     }
 
@@ -424,7 +432,8 @@ pub async fn stop(ctx: Context<'_>) -> Result_<()> {
     let (_, has_handler) = super::utils::in_voice(ctx).await?;
 
     if !has_handler {
-        ctx.reply("Not in a voice channel, good sir!").await?;
+        ctx.send(reply("Error", "Not in a voice channel, good sir!"))
+            .await?;
         return Ok(());
     }
 
